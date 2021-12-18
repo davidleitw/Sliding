@@ -37,7 +37,7 @@ func (slw *Slw) Sync() {
 	index := slw.getCurrentIndex(current)
 	start := slw.getCurrentStart(current)
 
-	// first round
+	// First round, create a new window with upload function.
 	if slw.windows[index] == nil {
 		slw.mu.Lock()
 		slw.windows[index] = NewWindow(start, nil)
@@ -50,6 +50,18 @@ func (slw *Slw) Sync() {
 		slw.windows[index].Update(start)
 		return
 	}
+}
+
+func (slw *Slw) AtomicWindowCounterAdd(index int, delta int32) {
+	slw.windows[index].atomicCounterAdd(delta)
+}
+
+func (slw *Slw) SetWindowMetaDataDefault(index int, key string, value int) {
+	slw.windows[index].setDefaultMedaData(key, value)
+}
+
+func (slw *Slw) AtomicWindowMetaDataAdd(index int, key string, delta int) error {
+	return slw.windows[index].atomicMetaDataAdd(key, delta)
 }
 
 func (slw *Slw) getCurrentIndex(current int64) int {

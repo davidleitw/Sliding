@@ -3,6 +3,7 @@ package slidingwindow
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 )
 
 type uploadFunc func()
@@ -22,7 +23,7 @@ type window struct {
 	metaData map[string]int
 
 	// Counter can count some simple information.
-	counter int
+	counter int32
 }
 
 func NewWindow(start int64, upl uploadFunc) *window {
@@ -46,9 +47,30 @@ func (w *window) registerUploadFunction(upl uploadFunc) error {
 	if w.upload != nil {
 		return errors.New("already register upload function")
 	}
-
 	w.upload = upl
 	return nil
+}
+
+func (w *window) atomicCounterAdd(delta int32) {
+	atomic.AddInt32(&w.counter, delta)
+}
+
+func (w *window) atomicMetaDataAdd(key string, delta int) int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if value, ok := w.metaData[key]; ok {
+		w.metaData[key] = value + delta
+		return delta
+	}
+	return 0
+}
+
+func (w *window) setDefaultMedaData(key string, value int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.metaData[key] = value
 }
 
 func (w *window) checkStartTime(start int64) bool {
