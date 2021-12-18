@@ -60,7 +60,7 @@ func (slw *Slw) SetWindowMetaDataDefault(index int, key string, value int) {
 	slw.windows[index].setDefaultMedaData(key, value)
 }
 
-func (slw *Slw) AtomicWindowMetaDataAdd(index int, key string, delta int) error {
+func (slw *Slw) AtomicWindowMetaDataAdd(index int, key string, delta int) int {
 	return slw.windows[index].atomicMetaDataAdd(key, delta)
 }
 
