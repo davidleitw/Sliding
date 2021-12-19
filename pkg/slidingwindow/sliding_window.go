@@ -21,7 +21,7 @@ type Slw struct {
 }
 
 func NewSlidingWindows(size, length int64, upl uploadFunc) *Slw {
-	return &Slw{
+	slw := &Slw{
 		mu:                sync.Mutex{},
 		windows:           make([]*window, length),
 		windowSize:        size,
@@ -29,6 +29,13 @@ func NewSlidingWindows(size, length int64, upl uploadFunc) *Slw {
 		currentIndex:      0,
 		defaultUploadFunc: upl,
 	}
+
+	beginTime := time.Now().UnixMilli()
+	for offset := 0; offset < int(slw.windowLength); offset++ {
+		start := beginTime + int64(offset)*slw.windowSize
+		slw.windows[offset] = NewWindow(start, slw.defaultUploadFunc)
+	}
+	return slw
 }
 
 func (slw *Slw) SetNewWindowSize(size int64) {
@@ -48,10 +55,7 @@ func (slw *Slw) Sync() *Slw {
 	slw.currentIndex = index
 	// First round, create a new window with upload function.
 	for {
-		if slw.windows[index] == nil {
-			slw.windows[index] = NewWindow(start, slw.defaultUploadFunc)
-			return slw
-		} else if !slw.windows[index].checkStartTime(start) {
+		if !slw.windows[index].checkStartTime(start) {
 			slw.windows[index].Update(start)
 			return slw
 		} else {

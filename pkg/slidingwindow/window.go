@@ -3,7 +3,6 @@ package slidingwindow
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 )
 
 type uploadFunc func(int32, map[string]int)
@@ -56,7 +55,10 @@ func (w *window) registerUploadFunction(upl uploadFunc) error {
 }
 
 func (w *window) atomicCounterAdd(delta int32) {
-	atomic.AddInt32(&w.counter, delta)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.counter += delta
+	// atomic.AddInt32(&w.counter, delta)
 }
 
 func (w *window) atomicMetaDataAdd(key string, delta int) {
