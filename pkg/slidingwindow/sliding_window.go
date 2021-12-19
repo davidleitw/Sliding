@@ -1,6 +1,7 @@
 package slidingwindow
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -14,14 +15,19 @@ type Slw struct {
 	windows      []*window
 	windowSize   int64
 	windowLength int64
+
+	currentIndex      int
+	defaultUploadFunc uploadFunc
 }
 
-func NewSlidingWindows(size, length int64) *Slw {
+func NewSlidingWindows(size, length int64, upl uploadFunc) *Slw {
 	return &Slw{
-		mu:           sync.Mutex{},
-		windows:      make([]*window, length),
-		windowSize:   size,
-		windowLength: length,
+		mu:                sync.Mutex{},
+		windows:           make([]*window, length),
+		windowSize:        size,
+		windowLength:      length,
+		currentIndex:      0,
+		defaultUploadFunc: upl,
 	}
 }
 
@@ -31,37 +37,42 @@ func (slw *Slw) SetNewWindowSize(size int64) {
 	slw.mu.Unlock()
 }
 
-func (slw *Slw) Sync() {
+func (slw *Slw) Sync() *Slw {
+	slw.mu.Lock()
+	defer slw.mu.Unlock()
 	current := time.Now().UnixMilli()
 
 	index := slw.getCurrentIndex(current)
 	start := slw.getCurrentStart(current)
 
+	slw.currentIndex = index
 	// First round, create a new window with upload function.
-	if slw.windows[index] == nil {
-		slw.mu.Lock()
-		slw.windows[index] = NewWindow(start, nil)
-		slw.mu.Unlock()
-		return
+	for {
+		if slw.windows[index] == nil {
+			slw.windows[index] = NewWindow(start, slw.defaultUploadFunc)
+			return slw
+		} else if !slw.windows[index].checkStartTime(start) {
+			slw.windows[index].Update(start)
+			return slw
+		} else {
+			return slw
+		}
 	}
-
-	// start != slw.windows[index].startTime
-	if !slw.windows[index].checkStartTime(start) {
-		slw.windows[index].Update(start)
-		return
-	}
 }
 
-func (slw *Slw) AtomicWindowCounterAdd(index int, delta int32) {
-	slw.windows[index].atomicCounterAdd(delta)
+func (slw *Slw) AtomicWindowCounterAdd(delta int32) *Slw {
+	slw.windows[slw.currentIndex].atomicCounterAdd(delta)
+	return slw
 }
 
-func (slw *Slw) SetWindowMetaDataDefault(index int, key string, value int) {
-	slw.windows[index].setDefaultMedaData(key, value)
+func (slw *Slw) AtomicWindowMetaDataAdd(key string, delta int) *Slw {
+	slw.windows[slw.currentIndex].atomicMetaDataAdd(key, delta)
+	return slw
 }
 
-func (slw *Slw) AtomicWindowMetaDataAdd(index int, key string, delta int) int {
-	return slw.windows[index].atomicMetaDataAdd(key, delta)
+func (slw *Slw) SetWindowMetaDataDefault(key string, value int) *Slw {
+	slw.windows[slw.currentIndex].setDefaultMedaData(key, value)
+	return slw
 }
 
 func (slw *Slw) getCurrentIndex(current int64) int {
@@ -70,4 +81,16 @@ func (slw *Slw) getCurrentIndex(current int64) int {
 
 func (slw *Slw) getCurrentStart(current int64) int64 {
 	return current - (current % slw.windowSize)
+}
+
+func (slw *Slw) PrintInfo() int {
+	cnt := 0
+	for idx := 0; idx < int(slw.windowLength); idx++ {
+		if slw.windows[idx] != nil {
+			fmt.Println(idx, slw.windows[idx].counter, slw.windows[idx].metaData)
+			cnt += int(slw.windows[idx].counter)
+		}
+	}
+	fmt.Println("cnt = ", cnt)
+	return cnt
 }

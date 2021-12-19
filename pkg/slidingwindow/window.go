@@ -6,7 +6,11 @@ import (
 	"sync/atomic"
 )
 
-type uploadFunc func()
+type uploadFunc func(int32, map[string]int)
+
+func WrapUploadFunc(upl func(int32, map[string]int)) uploadFunc {
+	return uploadFunc(upl)
+}
 
 type window struct {
 	// When new start time != startTime, it means window needed to be update.
@@ -19,7 +23,7 @@ type window struct {
 	upload uploadFunc
 
 	// Store meta data, and use upload function to save it when window is updated.
-	// metaData can use in some complex scenario.
+	// metaData can use in some complex scenario than counter.
 	metaData map[string]int
 
 	// Counter can count some simple information.
@@ -55,15 +59,15 @@ func (w *window) atomicCounterAdd(delta int32) {
 	atomic.AddInt32(&w.counter, delta)
 }
 
-func (w *window) atomicMetaDataAdd(key string, delta int) int {
+func (w *window) atomicMetaDataAdd(key string, delta int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if value, ok := w.metaData[key]; ok {
 		w.metaData[key] = value + delta
-		return delta
+	} else {
+		w.metaData[key] = delta
 	}
-	return 0
 }
 
 func (w *window) setDefaultMedaData(key string, value int) {
@@ -83,7 +87,7 @@ func (w *window) Update(start int64) {
 
 	// Update window start, and call its upload function.
 	if w.upload != nil {
-		w.upload()
+		w.upload(w.counter, w.metaData)
 	}
 	w.startTime = start
 
@@ -91,6 +95,7 @@ func (w *window) Update(start int64) {
 	w.reset()
 }
 
+// new window with new counter and meta data.
 func (w *window) reset() {
 	w.counter = 0
 	w.metaData = make(map[string]int)
