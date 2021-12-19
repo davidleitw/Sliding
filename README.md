@@ -8,7 +8,28 @@
 
 ## <img src="https://img.icons8.com/color/48/000000/king.png"/> 概念
 
-動工中
+#### Installation
+
+```go
+go get github.com/davidleitw/Sliding/pkg/slidingwindow
+```
+
+#### include
+
+```go
+import "github.com/davidleitw/Sliding/pkg/slidingwindow"
+```
+
+在建立 `Sliding window` 的時候可以指定 `windowSize` 與 `windowLength`。
+
+- `windowSize`: 單一窗口時間，用 `ms` 為單位
+- `windowLength`: 總共有幾個 `window`
+
+創立一個 `windowSize=100ms`, `windowLength=10` 的 `Sliding Window` 可以參考以下範例，這樣一輪總共有 `1000ms = 1s`。
+
+```go
+slw := slidingwindow.NewSlidingWindows(100, 10, nil)
+```
 
 ## <img src="https://img.icons8.com/color/48/000000/knight.png"/> 範例
 
