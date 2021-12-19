@@ -1,6 +1,6 @@
-# Sliding
+# <img src="https://img.icons8.com/color/96/000000/chessboard.png"/> Sliding
 
-## <img src="https://img.icons8.com/color/48/000000/chessboard.png"/> 簡介
+## <img src="https://img.icons8.com/color/48/000000/queen.png"/> 簡介
 
 `Sliding` 是一個基於 `sliding window algorithm` 的輕量級 `library`。開發它的靈感來自於一些微服務限流專案(Ex: [guava](https://github.com/google/guava),[Sentinal](https://github.com/alibaba/Sentinel)) 中關於統計 `QPS` 的作法，透過將一些簡單的操作封裝，可以有效的省去開發的成本。
 
