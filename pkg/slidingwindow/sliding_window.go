@@ -16,7 +16,7 @@ type Slw struct {
 	windowSize   int64
 	windowLength int64
 
-	currentIndex      int
+	currentIndex      int64
 	defaultUploadFunc uploadFunc
 }
 
@@ -44,6 +44,28 @@ func (slw *Slw) SetNewWindowSize(size int64) {
 	slw.mu.Unlock()
 }
 
+func (slw *Slw) SetAllWindowsUploadFunc(upl uploadFunc) {
+	slw.mu.Lock()
+	defer slw.mu.Unlock()
+
+	for _, win := range slw.windows {
+		win.registerUploadFunction(upl)
+	}
+}
+
+func (slw *Slw) SetDefaultMetaDataKeys(keys []string) {
+	for _, win := range slw.windows {
+		win.setDefaultMetaDataKeys(keys)
+	}
+}
+
+func (slw *Slw) SetLastWindowUploadFunc(upl uploadFunc) {
+	slw.mu.Lock()
+	defer slw.mu.Unlock()
+
+	slw.windows[slw.windowLength-1].registerUploadFunction(upl)
+}
+
 func (slw *Slw) Sync() *Slw {
 	slw.mu.Lock()
 	defer slw.mu.Unlock()
@@ -64,7 +86,7 @@ func (slw *Slw) Sync() *Slw {
 	}
 }
 
-func (slw *Slw) AtomicWindowCounterAdd(delta int32) *Slw {
+func (slw *Slw) AtomicWindowCounterAdd(delta int) *Slw {
 	slw.windows[slw.currentIndex].atomicCounterAdd(delta)
 	return slw
 }
@@ -74,13 +96,13 @@ func (slw *Slw) AtomicWindowMetaDataAdd(key string, delta int) *Slw {
 	return slw
 }
 
-func (slw *Slw) SetWindowMetaDataDefault(key string, value int) *Slw {
-	slw.windows[slw.currentIndex].setDefaultMedaData(key, value)
+func (slw *Slw) SetWindowMetaDataDefaultKv(key string, value int) *Slw {
+	slw.windows[slw.currentIndex].setMedaDataDefaultKv(key, value)
 	return slw
 }
 
-func (slw *Slw) getCurrentIndex(current int64) int {
-	return int((current / slw.windowSize) % slw.windowLength)
+func (slw *Slw) getCurrentIndex(current int64) int64 {
+	return (current / slw.windowSize) % slw.windowLength
 }
 
 func (slw *Slw) getCurrentStart(current int64) int64 {

@@ -1,13 +1,53 @@
 package slidingwindow
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 )
 
-type uploadFunc func(int32, map[string]int)
+type kv struct {
+	key          string
+	defaultValue int
 
-func WrapUploadFunc(upl func(int32, map[string]int)) uploadFunc {
+	next *kv
+}
+
+type kvlist struct {
+	head   *kv
+	tail   *kv
+	length int
+}
+
+func (list *kvlist) insert(key string, value int) {
+	if list.head == nil && list.tail == nil {
+		list.head = &kv{key: key, defaultValue: value, next: nil}
+		list.tail = list.head
+		list.length = 1
+		return
+	}
+
+	list.tail.next = &kv{key: key, defaultValue: value, next: nil}
+	list.tail = list.tail.next
+	list.length++
+}
+
+func (list *kvlist) setDefault(key string, value int) {
+	head := list.head
+	for head != nil {
+		if head.key == key {
+			head.defaultValue = value
+			return
+		}
+		head = head.next
+	}
+
+	list.tail.next = &kv{key: key, defaultValue: value, next: nil}
+	list.tail = list.tail.next
+}
+
+type uploadFunc func(int, map[string]int)
+
+func WrapUploadFunc(upl func(int, map[string]int)) uploadFunc {
 	return uploadFunc(upl)
 }
 
@@ -21,44 +61,42 @@ type window struct {
 	// Upload function will triggered when new start time != startTime
 	upload uploadFunc
 
+	// Define meta data key.
+	defaultMedaDataKvlist *kvlist
 	// Store meta data, and use upload function to save it when window is updated.
 	// metaData can use in some complex scenario than counter.
 	metaData map[string]int
 
 	// Counter can count some simple information.
-	counter int32
+	counter int
 }
 
 func NewWindow(start int64, upl uploadFunc) *window {
 	w := &window{
-		startTime: start,
-		mu:        sync.Mutex{},
-		metaData:  make(map[string]int),
-		counter:   0,
+		startTime:             start,
+		mu:                    sync.Mutex{},
+		defaultMedaDataKvlist: new(kvlist),
+		metaData:              make(map[string]int),
+		counter:               0,
 	}
 
 	if upl != nil {
-		_ = w.registerUploadFunction(upl)
+		w.registerUploadFunction(upl)
 	}
 	return w
 }
 
-func (w *window) registerUploadFunction(upl uploadFunc) error {
+func (w *window) registerUploadFunction(upl uploadFunc) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.upload != nil {
-		return errors.New("already register upload function")
-	}
 	w.upload = upl
-	return nil
 }
 
-func (w *window) atomicCounterAdd(delta int32) {
+func (w *window) atomicCounterAdd(delta int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.counter += delta
-	// atomic.AddInt32(&w.counter, delta)
 }
 
 func (w *window) atomicMetaDataAdd(key string, delta int) {
@@ -72,11 +110,25 @@ func (w *window) atomicMetaDataAdd(key string, delta int) {
 	}
 }
 
-func (w *window) setDefaultMedaData(key string, value int) {
+func (w *window) setDefaultMetaDataKeys(keys []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, key := range keys {
+		w.defaultMedaDataKvlist.insert(key, 0)
+	}
+
+	head := w.defaultMedaDataKvlist.head
+	for head != nil {
+		fmt.Println(head.key, head.defaultValue)
+		head = head.next
+	}
+
+}
+
+func (w *window) setMedaDataDefaultKv(key string, value int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	w.metaData[key] = value
 }
 
 func (w *window) checkStartTime(start int64) bool {
@@ -100,5 +152,10 @@ func (w *window) Update(start int64) {
 // new window with new counter and meta data.
 func (w *window) reset() {
 	w.counter = 0
-	w.metaData = make(map[string]int)
+
+	head := w.defaultMedaDataKvlist.head
+	for head != nil {
+		w.metaData[head.key] = head.defaultValue
+		head = head.next
+	}
 }
