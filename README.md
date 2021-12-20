@@ -51,3 +51,9 @@ slw := slidingwindow.NewSlidingWindows(125, 8, nil)
 ## <img src="https://img.icons8.com/color/48/000000/pawn.png"/> 參考文章
 
 動工中
+
+## TODO
+
+- 思考兩個使用範例
+    - 整合 InfluxDB, Grafana 呈現
+- 思考 window 的更新問題，尤其是超過兩輪沒有更新時如何補上空缺的資料
