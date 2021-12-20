@@ -53,9 +53,29 @@ func (slw *Slw) SetAllWindowsUploadFunc(upl uploadFunc) {
 	}
 }
 
-func (slw *Slw) SetDefaultMetaDataKeys(keys []string) {
+func (slw *Slw) RegisterDefaultMetaKeys(keys []string) *Slw {
 	for _, win := range slw.windows {
-		win.setDefaultMetaDataKeys(keys)
+		win.registerDefaultMetaKeys(keys)
+	}
+	return slw
+}
+
+func (slw *Slw) SetDefaultMetaKv(key string, value int) *Slw {
+	slw.mu.Lock()
+	defer slw.mu.Unlock()
+
+	for _, win := range slw.windows {
+		win.setDefaultMetaKv(key, value)
+	}
+	return slw
+}
+
+func (slw *Slw) RemoveDefaultKey(key string) {
+	slw.mu.Lock()
+	defer slw.mu.Unlock()
+
+	for _, win := range slw.windows {
+		win.removeDefaultKey(key)
 	}
 }
 
@@ -93,11 +113,6 @@ func (slw *Slw) AtomicWindowCounterAdd(delta int) *Slw {
 
 func (slw *Slw) AtomicWindowMetaDataAdd(key string, delta int) *Slw {
 	slw.windows[slw.currentIndex].atomicMetaDataAdd(key, delta)
-	return slw
-}
-
-func (slw *Slw) SetWindowMetaDataDefaultKv(key string, value int) *Slw {
-	slw.windows[slw.currentIndex].setMedaDataDefaultKv(key, value)
 	return slw
 }
 

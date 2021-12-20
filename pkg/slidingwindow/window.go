@@ -12,26 +12,20 @@ type kv struct {
 	next *kv
 }
 
-type kvlist struct {
+type Kv struct {
 	head   *kv
 	tail   *kv
 	length int
 }
 
-func (list *kvlist) insert(key string, value int) {
-	if list.head == nil && list.tail == nil {
+func (list *Kv) setDefault(key string, value int) {
+	if list.head == nil && list.tail == nil && list.length == 0 {
 		list.head = &kv{key: key, defaultValue: value, next: nil}
 		list.tail = list.head
 		list.length = 1
 		return
 	}
 
-	list.tail.next = &kv{key: key, defaultValue: value, next: nil}
-	list.tail = list.tail.next
-	list.length++
-}
-
-func (list *kvlist) setDefault(key string, value int) {
 	head := list.head
 	for head != nil {
 		if head.key == key {
@@ -43,6 +37,34 @@ func (list *kvlist) setDefault(key string, value int) {
 
 	list.tail.next = &kv{key: key, defaultValue: value, next: nil}
 	list.tail = list.tail.next
+	list.length++
+}
+
+func (list *Kv) remove(key string) int {
+	if list.head.key == key {
+		list.head = nil
+		if list.length == 1 {
+			list.tail = nil
+			list.length = 0
+		}
+		return 0
+	}
+
+	var prev *kv = nil
+	var head *kv = list.head
+
+	for head != nil {
+		if head.key == key {
+			prev.next = head.next
+			head = nil
+			return 0
+		}
+		prev = head
+		head = head.next
+	}
+
+	// return -1 means not found the key in key value list.
+	return -1
 }
 
 type uploadFunc func(int, map[string]int)
@@ -62,7 +84,7 @@ type window struct {
 	upload uploadFunc
 
 	// Define meta data key.
-	defaultMedaDataKvlist *kvlist
+	defaultMetaList *Kv
 	// Store meta data, and use upload function to save it when window is updated.
 	// metaData can use in some complex scenario than counter.
 	metaData map[string]int
@@ -73,11 +95,11 @@ type window struct {
 
 func NewWindow(start int64, upl uploadFunc) *window {
 	w := &window{
-		startTime:             start,
-		mu:                    sync.Mutex{},
-		defaultMedaDataKvlist: new(kvlist),
-		metaData:              make(map[string]int),
-		counter:               0,
+		startTime:       start,
+		mu:              sync.Mutex{},
+		defaultMetaList: new(Kv),
+		metaData:        make(map[string]int),
+		counter:         0,
 	}
 
 	if upl != nil {
@@ -93,6 +115,35 @@ func (w *window) registerUploadFunction(upl uploadFunc) {
 	w.upload = upl
 }
 
+// Default all key with 0.
+func (w *window) registerDefaultMetaKeys(keys []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, key := range keys {
+		w.defaultMetaList.setDefault(key, 0)
+	}
+
+	head := w.defaultMetaList.head
+	for head != nil {
+		fmt.Println(head.key, head.defaultValue)
+		head = head.next
+	}
+}
+
+func (w *window) setDefaultMetaKv(key string, value int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.defaultMetaList.setDefault(key, value)
+}
+
+func (w *window) removeDefaultKey(key string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.defaultMetaList.remove(key)
+}
+
 func (w *window) atomicCounterAdd(delta int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -102,33 +153,7 @@ func (w *window) atomicCounterAdd(delta int) {
 func (w *window) atomicMetaDataAdd(key string, delta int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
-	if value, ok := w.metaData[key]; ok {
-		w.metaData[key] = value + delta
-	} else {
-		w.metaData[key] = delta
-	}
-}
-
-func (w *window) setDefaultMetaDataKeys(keys []string) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for _, key := range keys {
-		w.defaultMedaDataKvlist.insert(key, 0)
-	}
-
-	head := w.defaultMedaDataKvlist.head
-	for head != nil {
-		fmt.Println(head.key, head.defaultValue)
-		head = head.next
-	}
-
-}
-
-func (w *window) setMedaDataDefaultKv(key string, value int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
+	w.metaData[key] += delta
 }
 
 func (w *window) checkStartTime(start int64) bool {
@@ -153,7 +178,7 @@ func (w *window) Update(start int64) {
 func (w *window) reset() {
 	w.counter = 0
 
-	head := w.defaultMedaDataKvlist.head
+	head := w.defaultMetaList.head
 	for head != nil {
 		w.metaData[head.key] = head.defaultValue
 		head = head.next

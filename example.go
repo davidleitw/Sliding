@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/davidleitw/Sliding/pkg/slidingwindow"
 )
@@ -11,15 +10,15 @@ import (
 var cnt = 0
 var wg sync.WaitGroup
 
-func upload(counter int32, metadata map[string]int) {
+func upload(counter int, metadata map[string]int) {
 	cnt += int(counter)
 	fmt.Println(counter, metadata)
 }
 
 func thread(slw *slidingwindow.Slw, tid int) {
-	for i := 0; i < 400000; i++ {
+	for i := 0; i < 40000000; i++ {
 		slw.Sync().AtomicWindowCounterAdd(1).AtomicWindowMetaDataAdd(fmt.Sprintf("thread %d", tid), 2)
-		time.Sleep(3 * time.Microsecond)
+		// time.Sleep(3 * time.Microsecond)
 	}
 	defer wg.Done()
 }
@@ -27,6 +26,7 @@ func thread(slw *slidingwindow.Slw, tid int) {
 func main() {
 	// Ten windows, each has 100 ms.
 	slw := slidingwindow.NewSlidingWindows(250, 8, slidingwindow.WrapUploadFunc(upload))
+	slw.SetDefaultMetaKv("thread 0", 0).SetDefaultMetaKv("thread 1", 0).SetDefaultMetaKv("thread 2", 0).SetDefaultMetaKv("thread 3", 0)
 	fmt.Println(slw)
 
 	wg.Add(4)
