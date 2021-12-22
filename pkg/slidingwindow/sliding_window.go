@@ -11,51 +11,48 @@ type SlidingWindows interface {
 }
 
 type Slw struct {
-	mu           sync.Mutex
-	windows      []*window
-	windowSize   int64
-	windowLength int64
+	mu              sync.Mutex
+	windows         []*window
+	windowSize      int64
+	windowLength    int64
+	windowRoundTime int64
 
-	currentIndex      int64
-	defaultUploadFunc uploadFunc
+	currentIndex int64
+	parser       *parser
 }
 
-func NewSlidingWindows(size, length int64, upl uploadFunc) *Slw {
+func NewSlidingWindows(size, length int64) *Slw {
 	slw := &Slw{
-		mu:                sync.Mutex{},
-		windows:           make([]*window, length),
-		windowSize:        size,
-		windowLength:      length,
-		currentIndex:      0,
-		defaultUploadFunc: upl,
+		mu:              sync.Mutex{},
+		windows:         make([]*window, length),
+		windowSize:      size,
+		windowLength:    length,
+		windowRoundTime: size * length,
+		currentIndex:    0,
 	}
 
+	slw.parser = Newparser(slw, slw.windowLength)
 	beginTime := time.Now().UnixMilli()
 	for offset := 0; offset < int(slw.windowLength); offset++ {
 		start := beginTime + int64(offset)*slw.windowSize
-		slw.windows[offset] = NewWindow(start, slw.defaultUploadFunc)
+		slw.windows[offset] = NewWindow(int64(offset), start)
+		// slw.windows[offset] = NewWindow(int64(offset), 0)
 	}
 	return slw
 }
 
-func (slw *Slw) SetNewWindowSize(size int64) {
-	slw.mu.Lock()
-	slw.windowSize = size
-	slw.mu.Unlock()
-}
-
-func (slw *Slw) SetAllWindowsUploadFunc(upl uploadFunc) {
+func (slw *Slw) SetAllWindowsparserFunc(upl parseFunc) {
 	slw.mu.Lock()
 	defer slw.mu.Unlock()
 
-	for _, win := range slw.windows {
-		win.registerUploadFunction(upl)
-	}
+	// for _, win := range slw.windows {
+	// 	win.registerparserFunction(upl)
+	// }
 }
 
 func (slw *Slw) RegisterDefaultMetaKeys(keys []string) *Slw {
 	for _, win := range slw.windows {
-		win.registerDefaultMetaKeys(keys)
+		go win.registerDefaultMetaKeys(keys)
 	}
 	return slw
 }
@@ -79,13 +76,6 @@ func (slw *Slw) RemoveDefaultKey(key string) {
 	}
 }
 
-func (slw *Slw) SetLastWindowUploadFunc(upl uploadFunc) {
-	slw.mu.Lock()
-	defer slw.mu.Unlock()
-
-	slw.windows[slw.windowLength-1].registerUploadFunction(upl)
-}
-
 func (slw *Slw) Sync() *Slw {
 	slw.mu.Lock()
 	defer slw.mu.Unlock()
@@ -95,9 +85,15 @@ func (slw *Slw) Sync() *Slw {
 	start := slw.getCurrentStart(current)
 
 	slw.currentIndex = index
-	// First round, create a new window with upload function.
+	// First round, create a new window with parser function.
 	for {
 		if !slw.windows[index].checkStartTime(start) {
+			chunk := slw.windows[index].wrapWindowChunk()
+			go func() {
+				slw.parser.parseWindowChunk(chunk)
+				slw.parser.setlastUpdate(index, start)
+			}()
+
 			slw.windows[index].Update(start)
 			return slw
 		} else {
@@ -132,6 +128,10 @@ func (slw *Slw) PrintInfo() int {
 			cnt += int(slw.windows[idx].counter)
 		}
 	}
-	fmt.Println("cnt = ", cnt)
-	return cnt
+	fmt.Println("cnt = ", cnt, ", p.cnt = ", slw.parser.c())
+	return cnt + slw.parser.c()
+}
+
+func (slw *Slw) Stop() {
+
 }
