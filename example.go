@@ -16,7 +16,7 @@ func upload(counter int, metadata map[string]int) {
 }
 
 func thread(slw *slidingwindow.Slw, tid int) {
-	for i := 0; i < 40000000; i++ {
+	for i := 0; i < 4000000; i++ {
 		slw.Sync().AtomicWindowCounterAdd(1).AtomicWindowMetaDataAdd(fmt.Sprintf("thread %d", tid), 2)
 		// time.Sleep(3 * time.Microsecond)
 	}
